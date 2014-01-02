@@ -13,7 +13,8 @@ public class Interruptor extends TimerTask {
 
 	@Override
 	public void run() {
-		toInterrupt.interrupt();		
+		toInterrupt.interrupt();
+		
 	}
 
 }

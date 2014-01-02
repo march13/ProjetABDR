@@ -5,6 +5,8 @@ import java.io.ObjectOutputStream;
 import java.util.Comparator;
 import java.util.Timer;
 
+import com.sleepycat.je.log.Trace;
+
 import oracle.kv.*;
 
 /**
@@ -15,6 +17,7 @@ public class AppliOneStore implements Comparator<ValueVersion>, Runnable {
 	private final KVStore store;
 	public int numThread;
 	public float myTime;
+
 	/**
 	 * Runs Init
 	 */
@@ -91,7 +94,7 @@ public class AppliOneStore implements Comparator<ValueVersion>, Runnable {
 				out = new ObjectOutputStream(bos);
 				out.writeObject(obj);
 				byte[] myBytes = bos.toByteArray();
-				k1 = Key.createKey("P1", "O" + (j + 100 * numThread));
+				k1 = Key.createKey("P1", "O" + (j));
 				// TODO gerer le hash en fonction du nombre de stores
 				// int hash = k1.hashCode()%2;
 				// pour le premier exo j'utilise qu'un store
@@ -101,10 +104,11 @@ public class AppliOneStore implements Comparator<ValueVersion>, Runnable {
 
 				do {
 					valVer = store.get(k1);
-					//store.put(k1, Value.createValue(myBytes));
+					// store.put(k1, Value.createValue(myBytes));
 					matchVersion = valVer.getVersion();
-					version = store.putIfVersion(k1, Value.createValue(myBytes), matchVersion);
-				}while (version == null);
+					version = store.putIfVersion(k1,
+							Value.createValue(myBytes), matchVersion);
+				} while (version == null);
 			} finally {
 				try {
 					if (out != null) {
@@ -122,7 +126,7 @@ public class AppliOneStore implements Comparator<ValueVersion>, Runnable {
 			}
 		}
 		time = System.currentTimeMillis();
-		myTime = (time - start)/100;
+		myTime = (time - start) / 100;
 	}
 
 	/**
@@ -142,19 +146,20 @@ public class AppliOneStore implements Comparator<ValueVersion>, Runnable {
 		Timer tim = new Timer();
 		long i = 0;
 		float finalTime = 0;
-		tim.schedule(inter, 1000);
+
 		try {
+			tim.schedule(inter, 1000);
 			while (!Thread.currentThread().isInterrupted()) {
 				i++;
 				m1();
-				finalTime +=myTime;
+				finalTime += myTime;
 			}
 
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		finalTime = finalTime/i;
+		finalTime = finalTime / i;
 		store.close();
-		System.out.println("fini"+numThread+"temps moyen " + finalTime);
+		System.out.println("fini" + numThread + "temps moyen " + finalTime);
 	}
 }

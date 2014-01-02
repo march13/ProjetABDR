@@ -15,7 +15,7 @@ public class Etape1a {
 		try {
 			Init i = new Init(args);
 			i.go();
-			int nbThreads = 14;
+			int nbThreads = 7;
 			ArrayList<Thread> threadList = new ArrayList<Thread>();
 			for (int j = 0; j<nbThreads; j++){
 				threadList.add(new Thread(new AppliOneStore(args, j+1)));
@@ -25,7 +25,7 @@ public class Etape1a {
 			for (int j=0; j<nbThreads; j++){
 				threadList.get(j).join();
 			}
-			
+
 		
 		} catch (Exception e) {
 			e.printStackTrace();

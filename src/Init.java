@@ -2,6 +2,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
+import java.util.ArrayList;
 
 import oracle.kv.*;
 
@@ -10,21 +11,17 @@ import oracle.kv.*;
  */
 public class Init{
 
-    private final KVStore store;
-    private final KVStore store2;
-
-
+    private ArrayList<KVStore> stores;
+    private int nbStores;
     /**
      * Parses command line args and opens the KVStore.
      */
-    public Init(String[] argv) {
-
-    	
-    	//TODO gerer plus de stores
+    public Init(String[] argv, int nbStores) {
+    	this.setNbStores(nbStores);
+    	stores = new ArrayList<KVStore>();
         String storeName = "kvstore";
         String hostName = "localhost";
-        String hostPort = "5000";
-        String hostPort2 = "5002";
+        String hostPort = "500";
         final int nArgs = argv.length;
         int argc = 0;
 
@@ -53,11 +50,11 @@ public class Init{
                 usage("Unknown argument: " + thisArg);
             }
         }
+        for (int i = 0;i<nbStores; i++){
+        	stores.add( KVStoreFactory.getStore
+            (new KVStoreConfig(storeName, hostName + ":" + (hostPort+2*i))));
+        }
 
-        store = KVStoreFactory.getStore
-            (new KVStoreConfig(storeName, hostName + ":" + hostPort));
-        store2 = KVStoreFactory.getStore
-                (new KVStoreConfig(storeName, hostName + ":" + hostPort2));
     }
 
     private void usage(String message) {
@@ -88,16 +85,8 @@ public class Init{
 	        	  byte[] myBytes = bos.toByteArray();
 	        	  k1 = Key.createKey("P" + j, "O" + i);
 	        	  //TODO gerer le hash en fonction du nombre de stores
-	        	 //int hash = k1.hashCode()%2;
-	        	  //pour le premier exo j'utilise qu'un store
-	        	  int hash = 0;
-	        	  if (hash ==0){
-	        		  store.put(k1, Value.createValue(myBytes));
-	        	  }
-	        	  else{
-	        		  store2.put(k1, Value.createValue(myBytes));
-	        	  }
-	              store.put(k1, Value.createValue(myBytes));
+	        	  int hash = k1.hashCode()%nbStores;
+        		  stores.get(hash).put(k1, Value.createValue(myBytes));
 	        	} finally {
 	        	  try {
 	        	    if (out != null) {
@@ -116,7 +105,16 @@ public class Init{
         }
         System.out.println("Fin d'initialisation");
 
-
-        store.close();
+        for(int i = 0; i<stores.size(); i++){
+        	stores.get(i).close();
+        }
     }
+
+	public int getNbStores() {
+		return nbStores;
+	}
+
+	public void setNbStores(int nbStores) {
+		this.nbStores = nbStores;
+	}
 }

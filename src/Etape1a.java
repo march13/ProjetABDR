@@ -13,9 +13,11 @@ public class Etape1a {
 	public static void main(String[] args) {
 		//Pour taper en même temps sur le store je crée plusieurs threads qui utilisent le timer
 		try {
-			Init i = new Init(args);
-			i.go();
 			int nbThreads = 7;
+			int nbStores = 1;
+			Init i = new Init(args, nbStores);
+			i.go();
+			
 			ArrayList<Thread> threadList = new ArrayList<Thread>();
 			for (int j = 0; j<nbThreads; j++){
 				threadList.add(new Thread(new AppliOneStore(args, j+1)));

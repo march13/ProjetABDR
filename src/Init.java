@@ -1,11 +1,9 @@
 import java.io.ByteArrayOutputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 
 import oracle.kv.*;
-import oracle.kv.stats.*;
 
 /**
  * TME avec KVStore : Init
@@ -15,25 +13,14 @@ public class Init{
     private final KVStore store;
     private final KVStore store2;
 
-    /**
-     * Runs Init
-     */
-    public static void main(String args[]) {
-        try {
-            Init a = new Init(args);
-            a.go();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
 
     /**
      * Parses command line args and opens the KVStore.
      */
-    private Init(String[] argv) {
+    public Init(String[] argv) {
 
     	
-    	
+    	//TODO gerer plus de stores
         String storeName = "kvstore";
         String hostName = "localhost";
         String hostPort = "5000";
@@ -88,11 +75,10 @@ public class Init{
     void go() throws Exception {
         System.out.println("Initialisation...");
 
-	    String key = "produit";
-	    String cat = "P";
-	    for (int j= 1; j<1001; j++){
+	    for (int j= 1; j<11; j++){
         	Key k1;
         	for(int i=1; i<101; i++){
+        		//je crée l'objet avec ses attributs puis le sérialize
 	        	KeyObject obj = new KeyObject(0, 1, 2, 3, 4, "blall", "jkhc", "jkhqskl", "khhkzejh", "lkjlmj");
 	        	ByteArrayOutputStream bos = new ByteArrayOutputStream();
 	        	ObjectOutput out = null;
@@ -101,7 +87,10 @@ public class Init{
 	        	  out.writeObject(obj);
 	        	  byte[] myBytes = bos.toByteArray();
 	        	  k1 = Key.createKey("P" + j, "O" + i);
-	        	  int hash = k1.hashCode()%2;
+	        	  //TODO gerer le hash en fonction du nombre de stores
+	        	 //int hash = k1.hashCode()%2;
+	        	  //pour le premier exo j'utilise qu'un store
+	        	  int hash = 0;
 	        	  if (hash ==0){
 	        		  store.put(k1, Value.createValue(myBytes));
 	        	  }

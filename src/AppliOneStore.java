@@ -160,6 +160,7 @@ public class AppliOneStore implements Comparator<ValueVersion>, Runnable {
 		}
 		finalTime = finalTime / i;
 		store.close();
+		tim.cancel();
 		System.out.println("fini" + numThread + "temps moyen " + finalTime);
 	}
 }

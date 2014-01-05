@@ -74,7 +74,7 @@ public class Init{
     void go() throws Exception {
         System.out.println("Initialisation...");
 
-	    for (int j= 1; j<11; j++){
+	    for (int j= 1; j<20; j++){
         	Key k1, compteur;
         	int hash = ("P"+j).hashCode()%nbStores;
         	compteur = Key.createKey("P"+j, "compteur");

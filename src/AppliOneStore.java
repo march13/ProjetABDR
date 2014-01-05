@@ -92,7 +92,7 @@ public class AppliOneStore implements Comparator<ValueVersion>, Runnable {
 			byte[] myBytes = bos.toByteArray();
 			
 			Key k1, compteur;
-			compteur = Key.createKey("P1", "compteur");
+			compteur = Key.createKey("P"+numThread, "compteur");
 			OperationFactory of = store.getOperationFactory();
 			boolean execOk;
 
@@ -111,7 +111,7 @@ public class AppliOneStore implements Comparator<ValueVersion>, Runnable {
 
 					val2 = Integer.parseInt(value);
 					val2++;
-					k1 = Key.createKey("P1", "O" + val2);
+					k1 = Key.createKey("P"+numThread, "O" + val2);
 					value = Integer.toString(val2);
 					operations.add(of.createPutIfVersion(compteur,
 							Value.createValue(value.getBytes()), matchVersion,

@@ -21,7 +21,7 @@ public class Init{
     	stores = new ArrayList<KVStore>();
         String storeName = "kvstore";
         String hostName = "localhost";
-        String hostPort = "500";
+        int hostPort = 5000;
         final int nArgs = argv.length;
         int argc = 0;
 
@@ -42,7 +42,7 @@ public class Init{
                 }
             } else if (thisArg.equals("-port")) {
                 if (argc < nArgs) {
-                    hostPort = argv[argc++];
+                   // hostPort = argv[argc++].;
                 } else {
                     usage("-port requires an argument");
                 }
@@ -51,8 +51,10 @@ public class Init{
             }
         }
         for (int i = 0;i<nbStores; i++){
+        	int port = hostPort + 2*i;
+        	System.out.println(port);
         	stores.add( KVStoreFactory.getStore
-            (new KVStoreConfig(storeName, hostName + ":" + (hostPort+2*i))));
+            (new KVStoreConfig(storeName, hostName + ":" + port)));
         }
 
     }
@@ -73,7 +75,9 @@ public class Init{
         System.out.println("Initialisation...");
 
 	    for (int j= 1; j<11; j++){
-        	Key k1;
+        	Key k1, compteur;
+        	int hash = ("P"+j).hashCode()%nbStores;
+        	compteur = Key.createKey("P"+j, "compteur");
         	for(int i=1; i<101; i++){
         		//je crée l'objet avec ses attributs puis le sérialize
 	        	KeyObject obj = new KeyObject(0, 1, 2, 3, 4, "blall", "jkhc", "jkhqskl", "khhkzejh", "lkjlmj");
@@ -84,9 +88,10 @@ public class Init{
 	        	  out.writeObject(obj);
 	        	  byte[] myBytes = bos.toByteArray();
 	        	  k1 = Key.createKey("P" + j, "O" + i);
+	        	  
 	        	  //TODO gerer le hash en fonction du nombre de stores
-	        	  int hash = k1.hashCode()%nbStores;
         		  stores.get(hash).put(k1, Value.createValue(myBytes));
+        		  
 	        	} finally {
 	        	  try {
 	        	    if (out != null) {
@@ -102,6 +107,7 @@ public class Init{
 	        	  }
 	        	}
         	}
+        	stores.get(hash).put(compteur, Value.createValue(Integer.toString(100).getBytes()));
         }
         System.out.println("Fin d'initialisation");
 

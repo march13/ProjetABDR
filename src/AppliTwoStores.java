@@ -6,14 +6,15 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Timer;
 
+
 import oracle.kv.*;
 
 /**
  * TME avec KVStore : Init
  */
-public class AppliOneStore implements Comparator<ValueVersion>, Runnable {
+public class AppliTwoStores implements Comparator<ValueVersion>, Runnable {
 
-	private final KVStore store;
+	private final KVStore store, store2;
 	public int numThread;
 	public float myTime;
 
@@ -21,21 +22,22 @@ public class AppliOneStore implements Comparator<ValueVersion>, Runnable {
 	 * Runs Init
 	 */
 
-	public AppliOneStore() {
+	public AppliTwoStores() {
 		super();
 		store = null;
+		store2 = null;
 		myTime = 0;
 	}
 
 	/**
 	 * Parses command line args and opens the KVStore.
 	 */
-	public AppliOneStore(String[] argv, int numThread) {
+	public AppliTwoStores(String[] argv, int numThread) {
 
 		String storeName = "kvstore";
 		String hostName = "localhost";
 		String hostPort = "5000";
-
+		String hostPort2 = "5002";
 		final int nArgs = argv.length;
 		int argc = 0;
 		this.numThread = numThread;
@@ -67,6 +69,8 @@ public class AppliOneStore implements Comparator<ValueVersion>, Runnable {
 
 		store = KVStoreFactory.getStore(new KVStoreConfig(storeName, hostName
 				+ ":" + hostPort));
+		store2 = KVStoreFactory.getStore(new KVStoreConfig(storeName, hostName
+				+ ":" + hostPort2));
 	}
 
 	private void usage(String message) {
@@ -151,6 +155,79 @@ public class AppliOneStore implements Comparator<ValueVersion>, Runnable {
 		time = System.currentTimeMillis();
 		myTime = (time - start);
 	}
+	void m2() throws Exception {
+		long start = System.currentTimeMillis();
+		long time;
+		for (int j = 1; j <= 100; j++) {
+			// dans ce scénario je tape sur les 10 premiers produits
+			// et une transaction ajoute 100 nouveaux objets
+			KeyObject obj = new KeyObject(0, 1, 2, 3, 4, "blall", "jkhc",
+					"jkhqskl", "khhkzejh", "lkjlmj");
+			ByteArrayOutputStream bos = new ByteArrayOutputStream();
+			ObjectOutput out = new ObjectOutputStream(bos);
+			out.writeObject(obj);
+			byte[] myBytes = bos.toByteArray();
+			
+			Key k1, compteur;
+			compteur = Key.createKey("P3", "compteur");
+			OperationFactory of = store2.getOperationFactory();
+			boolean execOk;
+
+			ValueVersion valVer;
+			Version matchVersion;
+			int val2;
+			
+			try {
+				valVer = store2.get(compteur);
+				
+				String value = new String(valVer.getValue().getValue());
+				matchVersion = valVer.getVersion();
+				OperationResult opRes;
+				do {
+					ArrayList<Operation> operations = new ArrayList<Operation>();
+
+					val2 = Integer.parseInt(value);
+					val2++;
+					k1 = Key.createKey("P3", "O" + val2);
+					value = Integer.toString(val2);
+					operations.add(of.createPutIfVersion(compteur,
+							Value.createValue(value.getBytes()), matchVersion,
+							ReturnValueVersion.Choice.ALL, true));
+					operations.add(of.createPut(k1, Value.createValue(myBytes),
+							ReturnValueVersion.Choice.NONE, true));
+
+					try{
+						store2.execute(operations).get(0);
+						execOk =true;
+					}
+					catch(OperationExecutionException oee){
+						opRes = oee.getFailedOperationResult();
+						value = new String(opRes.getPreviousValue().getValue());
+						matchVersion = opRes.getPreviousVersion();
+
+						execOk = false;
+					}
+				} while (!execOk);
+
+			} finally {
+				try {
+					if (out != null) {
+						out.close();
+					}
+				} catch (IOException ex) {
+					// ignore close exception
+				}
+				try {
+					bos.close();
+				} catch (IOException ex) {
+					// ignore close exception
+				}
+
+			}
+		}
+		time = System.currentTimeMillis();
+		myTime = (time - start);
+	}
 
 	/**
 	 * Initialisation
@@ -174,7 +251,10 @@ public class AppliOneStore implements Comparator<ValueVersion>, Runnable {
 			tim.schedule(inter, 10000);
 			while (!Thread.currentThread().isInterrupted()) {
 				i++;
-				m1();
+				if (numThread<6)
+					m1();
+				else 
+					m2();
 				finalTime += myTime;
 			}
 

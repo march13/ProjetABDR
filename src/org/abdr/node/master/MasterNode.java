@@ -8,6 +8,10 @@ public interface MasterNode extends Node {
 
 	void addSlave(String host, int port, String name) throws Exception;
 	
+	void addClient(String host, int port, String name) throws Exception;
+	
 	void deleteSlave(String name) throws RemoteException;
+	
+	void deleteClient(String name) throws RemoteException;
 	
 }

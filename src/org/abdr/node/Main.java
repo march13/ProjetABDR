@@ -9,10 +9,13 @@ import org.abdr.node.master.MasterNodeImpl;
 public class Main {
 
 	public static void main(String[] args) throws Exception {
-		if(isMaster(args)) {
+		if (isMaster(args)) {
 			startMaster(LocateRegistry.createRegistry(1099), args);
+			startSlave(LocateRegistry.getRegistry(), args, 0);
+			startSlave(LocateRegistry.getRegistry(), args, 2);
+			startSlave(LocateRegistry.getRegistry(), args, 4);
 		} else {
-			startSlave(LocateRegistry.getRegistry(), args);
+			return;
 		}
 	}
 
@@ -25,24 +28,21 @@ public class Main {
 		System.out.println("Le noeud maître a démarré");
 	}
 
-	static private void startSlave(Registry registry, String[] args)
-			throws Exception {
+	static private void startSlave(Registry registry, String[] args,
+			int numSlave) throws Exception {
 		String name;
-		if (!args[1].toString().equals(null))
-			 name = "slave"+args[1].toString();
-		else
-			return;
+			name = "slave" + numSlave;
 		Node node = new SlaveNode(name);
-		//node.setNumNode(new Integer(args[1].toString()));
+		// node.setNumNode(new Integer(args[1].toString()));
 		registry.rebind(name, node);
 		node = (Node) registry.lookup(name);
-		node.init(new Integer(args[1].toString()));
+		node.init(new Integer(numSlave));
 		System.out.println("Le noeud esclave a démarré");
 		MasterNode master = (MasterNode) registry.lookup("master");
 		master.addSlave("localhost", 1099, name);
-		
-		//master.put(name, name);
-		//System.out.println(new String(master.get(name)));
+
+		// master.put(name, name);
+		// System.out.println(new String(master.get(name)));
 	}
 
 	static private boolean isMaster(String[] args) {

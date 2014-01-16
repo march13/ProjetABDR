@@ -2,12 +2,9 @@ package org.abdr.client;
 
 import java.io.IOException;
 import java.rmi.RemoteException;
-import java.util.SortedMap;
+import java.util.ArrayList;
 
-import oracle.kv.KVStoreConfig;
-import oracle.kv.KVStoreFactory;
-import oracle.kv.Key;
-import oracle.kv.ValueVersion;
+import oracle.kv.Version;
 
 import org.abdr.node.AbstractNode;
 import org.abdr.node.Node;
@@ -49,9 +46,31 @@ public class ClientNode extends AbstractNode implements Node {
 	}
 
 	@Override
-	public byte[] get(String key) throws RemoteException {
+	public byte[] get(String key, String cat ) throws RemoteException {
 		// TODO Auto-generated method stub
 		return null;
+	}
+
+	@Override
+	public Version putifVersion(String key, String cat, byte[] data, Version matchVersion)
+			throws RemoteException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public void takeMyData(String srcHost, String srcPort, String key)
+			throws RemoteException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void multiPut(ArrayList<String> keys, ArrayList<String> cats,
+			ArrayList<byte[]> datas, ArrayList<Version> matchVersions)
+			throws RemoteException {
+		// TODO Auto-generated method stub
+		
 	}
 
 }

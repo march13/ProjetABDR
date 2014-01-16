@@ -2,17 +2,16 @@ package org.abdr.node;
 
 import java.io.IOException;
 import java.rmi.RemoteException;
+import java.util.ArrayList;
 import java.util.SortedMap;
-import java.util.SortedSet;
 
-import oracle.kv.Depth;
 import oracle.kv.KVStore;
 import oracle.kv.KVStoreConfig;
 import oracle.kv.KVStoreFactory;
 import oracle.kv.Key;
-import oracle.kv.KeyRange;
 import oracle.kv.Value;
 import oracle.kv.ValueVersion;
+import oracle.kv.Version;
 
 public class SlaveNode extends AbstractNode implements Node {
 
@@ -26,6 +25,30 @@ public class SlaveNode extends AbstractNode implements Node {
 		super(name);
 	}
 
+	@Override
+	public void takeMyData(String srcHost, String srcPort, String key) throws RemoteException {
+		try {
+			KVStore storeSrc, storeDest;
+			storeDest  = this.store;
+			storeSrc = KVStoreFactory.getStore(new KVStoreConfig(
+					"kvstore", srcHost + ":" + srcPort));
+			SortedMap<Key, ValueVersion> values;
+			Key k = Key.createKey(key);
+			values = storeSrc.multiGet(k, null, null);
+			System.out.println("nb values rec " + values.size());
+			for (java.util.Map.Entry<Key, ValueVersion> obj : values.entrySet()) {
+				storeDest.put(obj.getKey(), obj.getValue().getValue());
+			}
+			storeSrc.multiDelete(k, null, null);
+			storeSrc.close();
+		
+
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
 	@Override
 	public void put(String key, String cat, byte[] data) throws RemoteException {
 		//ici il faut faire l'ajout dans mon store
@@ -55,12 +78,30 @@ public class SlaveNode extends AbstractNode implements Node {
 	}
 
 	@Override
-	public byte[] get(String key) throws RemoteException {
-		ValueVersion valueVersion = store.get(Key.createKey(key));
+	public byte[] get(String key, String cat ) throws RemoteException {
+		ValueVersion valueVersion = store.get(Key.createKey(key, cat));
 		if (valueVersion == null) {
+			System.out.println(this.store.toString());
 			return null;
 		}
 		return valueVersion.getValue().getValue();
+	}
+
+	@Override
+	public Version putifVersion(String key, String cat, byte[] data, Version matchVersion)
+			throws RemoteException {
+		// TODO Auto-generated method stub
+		Key k = Key.createKey(key, cat);
+		Value value = Value.createValue(data);
+		return store.putIfVersion(k, value, matchVersion);
+	}
+
+	@Override
+	public void multiPut(ArrayList<String> keys, ArrayList<String> cats,
+			ArrayList<byte[]> datas, ArrayList<Version> matchVersions)
+			throws RemoteException {
+		// TODO Auto-generated method stub
+		
 	}
 
 

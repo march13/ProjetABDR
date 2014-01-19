@@ -2,7 +2,7 @@ package org.abdr.node;
 
 import java.io.IOException;
 import java.rmi.RemoteException;
-import java.util.ArrayList;
+import java.util.List;
 import java.util.SortedMap;
 
 import oracle.kv.KVStore;
@@ -97,9 +97,8 @@ public class SlaveNode extends AbstractNode implements Node {
 	}
 
 	@Override
-	public void multiPut(ArrayList<String> keys, ArrayList<String> cats,
-			ArrayList<byte[]> datas, ArrayList<Version> matchVersions)
-			throws RemoteException {
+	public void multiPut(List<KeyValueVersion> ops) throws RemoteException,
+			InterruptedException {
 		// TODO Auto-generated method stub
 		
 	}

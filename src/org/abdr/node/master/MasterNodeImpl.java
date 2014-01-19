@@ -9,9 +9,11 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import oracle.kv.KVStore;
 import oracle.kv.KVStoreConfig;
@@ -23,143 +25,158 @@ import oracle.kv.Version;
 import org.abdr.client.KeyObject;
 import org.abdr.node.AbstractNode;
 import org.abdr.node.Node;
+import org.abdr.node.KeyValueVersion;
+
 
 public class MasterNodeImpl extends AbstractNode implements MasterNode {
 
 	private static final long serialVersionUID = 1L;
+	int nbStores;
 	private List<Node> slaves;
 	private List<Node> clients;
-	Map<String, Integer> keyMap;
-	Map<String, Integer> useMap;
-	Map<Integer, Integer> storeUse;
-	Map<String, Mutex> mutexes;
-	int useMax = 1000;
-	int totalUse = 0;
+	ArrayList<KVStore> stores;
+
+	ConcurrentHashMap<String, KeyInfo> keyMap;
+	ConcurrentHashMap<Integer, AtomicInteger> storeUse;
+	// ConcurrentHashMap<String, AtomicInteger> useMap;
+	// ConcurrentHashMap<String, Mutex> mutexes;
+	int useMax;
+	AtomicInteger totalUse;
+	AtomicBoolean divisionRunning;
 	Mutex verrou;
+
 	public MasterNodeImpl() throws RemoteException {
 		super("master");
+		nbStores = 3;
+		stores = new ArrayList<KVStore>();
+
+		slaves = new ArrayList<>();
+		clients = new ArrayList<>();
+		keyMap = new ConcurrentHashMap<String, KeyInfo>();
+		storeUse = new ConcurrentHashMap<Integer, AtomicInteger>();
+		useMax = 1000;
+		totalUse = new AtomicInteger(0);
+		divisionRunning = new AtomicBoolean(false);
+		verrou = new Mutex();
+	}
+
+	private void incrementUse(KeyInfo ki) {
+		ki.getUse().incrementAndGet();
+		storeUse.get(ki.getStore()).incrementAndGet();
+		totalUse.incrementAndGet();
+	}
+
+	private void divideByTwo() {
+		if (!divisionRunning.getAndSet(true)) {
+			if (totalUse.get() >= 1000) {
+				for (KeyInfo entry : keyMap.values()) {
+					AtomicInteger kUse = entry.getUse();
+					kUse.getAndAdd(-kUse.get() / 2);
+				}
+				for (AtomicInteger entry : storeUse.values()) {
+					entry.getAndAdd(-entry.get() / 2);
+				}
+				totalUse.addAndGet(-1000);
+			}
+			divisionRunning.set(false);
+		}
+	}
+
+	/**
+	 * Get the KeyInfo associated with the specified key
+	 * The key is created in the default store (ie. matching its hashcode)
+	 * if it doesn't exist.
+	 * 
+	 * @param key
+	 * @return
+	 */
+	private KeyInfo getKeyInfo(String key){
+		KeyInfo kInfo = keyMap.get(key);
+		if (kInfo == null) { // new key
+			kInfo = new KeyInfo(key.hashCode() % slaves.size());
+			KeyInfo tmpInfo = keyMap.putIfAbsent(key, kInfo);
+			if (tmpInfo != null) {
+				// another thread just created the key
+				kInfo = tmpInfo;
+			}
+		}
+		return kInfo;
 	}
 	
-	public synchronized void divideByTwo(){
-		if (totalUse>=1000){
-			for (Map.Entry<String, Integer> entry : useMap.entrySet()){
-				useMap.put(entry.getKey(), entry.getValue()/2);
-			}
-			for (Map.Entry<Integer, Integer> entry : storeUse.entrySet()){
-				storeUse.put(entry.getKey(), entry.getValue()/2);
-			}
-			totalUse = 0;
-			
-		}
-	}
-	public synchronized int migrate(String key)
-			throws RemoteException, InterruptedException {
-		divideByTwo();
-		verrou.lockWrite();
-		Integer selectedStore = keyMap.get(key);
-		if (selectedStore.equals(null)) {
-			mutexes.put(key, new Mutex());
-			selectedStore = key.hashCode() % slaves.size();
-			keyMap.put(key, selectedStore);
-			useMap.put(key, 1);
-			
-			storeUse.put(selectedStore, storeUse.get(selectedStore) + 1);
-			verrou.unlockWrite();
+	private KeyInfo migrateTo(String key, int store) throws RemoteException,
+	InterruptedException {
+		KeyInfo kInfo = getKeyInfo(key);
+
+		int selectedStore = kInfo.getStore();
+
+		// A partir d'ici on va demander aux esclaves la migration
+		if (selectedStore != store) {
+			kInfo.getMutex().lockWrite();
+
+			// mise à jour de mes valeurs d'utilisation de store
+			// System.out.println("minstore " + minStore + "value"
+			// + storeUse.get(minStore));
+			storeUse.get(store).addAndGet(kInfo.getUse().get());
+			storeUse.get(selectedStore).addAndGet(-kInfo.getUse().get());
+
+			String srcHost = "localhost";
+			String srcPort = "500" + selectedStore * 2;
+
+			Node slave = slaves.get(store);
+			slave.takeMyData(srcHost, srcPort, key);
+			// selectionner un autre store
+			System.out.println("je migre de " + selectedStore + " a "
+					+ store);
+			kInfo.setStore(store);
+			kInfo.getMutex().writeToRead();
 		} else {
-			verrou.unlockWrite();
-			Integer newUseVal = useMap.get(key) + 1;
-			useMap.put(key, newUseVal);
-			storeUse.put(selectedStore, storeUse.get(selectedStore) + 1);
-			// A partir d'ici on va demander aux esclaves la migration
-			if ((useMap.get(key).intValue()) % useMax == 0) {
-				mutexes.get(key).lockWrite();
-				Integer minStore = Collections.min(storeUse.values());
-				for (Integer b : storeUse.keySet()) {
-					if (storeUse.get(b) == minStore) {
-						minStore = b;
-						break;
-					}
-				}
-				// mise à jour de mes valeurs d'utilisation de store
-				System.out.println("minstore " + minStore + "value"
-						+ storeUse.get(minStore));
-				storeUse.put(minStore, storeUse.get(minStore) + useMap.get(key));
-				storeUse.put(selectedStore, storeUse.get(selectedStore)
-						- useMap.get(key));
-				String srcHost = "localhost";
-				String srcPort = "500" + selectedStore * 2;
-				Node slave = slaves.get(minStore);
-				slave.takeMyData(srcHost, srcPort, key);
-				// selectionner un autre store
-				System.out.println("je migre de " + selectedStore + " a "
-						+ minStore);
-				keyMap.put(key, minStore);
-				selectedStore = minStore;
-				mutexes.get(key).writeToRead();
-			}
-			else {
-				mutexes.get(key).lockRead();
-			}
+			kInfo.getMutex().lockRead();
 		}
-		return selectedStore;
+		return kInfo;
+	}
+
+	private KeyInfo balance(String key) throws RemoteException,
+	InterruptedException {
+		divideByTwo();
+		KeyInfo kInfo = getKeyInfo(key);
+
+		// A partir d'ici on va demander aux esclaves la migration
+		if (kInfo.getUse().get() > useMax) {
+			Entry<Integer, AtomicInteger> minStore = Collections.min(
+					storeUse.entrySet(), new StoreUseComparator());
+			migrateTo(key, minStore.getKey());
+		}
+		return kInfo;
 	}
 
 	@Override
-	public void multiPut(ArrayList<String> keys, ArrayList<String> cats,
-			ArrayList<byte[]> datas, ArrayList<Version> matchVersions)
-			throws RemoteException, InterruptedException {
+	public void multiPut(List<KeyValueVersion> ops)
+					throws RemoteException, InterruptedException {
 		Node slave;
-		Integer selectedStore = 0;
-		int destStore;
+		if (ops.isEmpty())
+				return;
+		
 		// choisir le plus petit store
-		destStore = Collections.min(storeUse.values());
-		// migrer toutes les profils sur ce store store
-		for (int i = 0; i < keys.size(); i++) {
-			selectedStore = keyMap.get(keys.get(i));
-			if (selectedStore.equals(null)) {
-				selectedStore = destStore;
-				keyMap.put(keys.get(i), selectedStore);
-				useMap.put(keys.get(i), 1);
-				mutexes.put(keys.get(i), new Mutex());
-				storeUse.put(selectedStore, storeUse.get(selectedStore) + 1);
-			}
-			
-			//je suis deja sur le bon store
-			else if(selectedStore.equals(new Integer(destStore))){
-			} 
-			else {
-				String srcHost = "localhost";
-				String srcPort = "500" + selectedStore * 2;
-				slave = slaves.get(destStore);
-				
-				if (i==0 || (!keys.get(i - 1).equals(null)) ) {
-					if (i==0 || (!keys.get(i - 1).equals(i))) {
-						mutexes.get(keys.get(i)).lockWrite();
-						keyMap.put(keys.get(i), destStore);
-						storeUse.put(selectedStore, storeUse.get(selectedStore)
-								- useMap.get(keys.get(i)));
-						storeUse.put(destStore, storeUse.get(destStore)
-								+ useMap.get(keys.get(i)));
-						slave.takeMyData(srcHost, srcPort, keys.get(i));
-						mutexes.get(keys.get(i)).writeToRead();
-						System.out.println("migration de "+selectedStore+" vers "+destStore);
-					}
-				}
-			}
+		Entry<Integer, AtomicInteger> destStore = Collections.min(
+				storeUse.entrySet(), new StoreUseComparator());
+		
+		// migrer toutes les profils sur ce store
+		List<KeyValueVersion> sortedOps = new ArrayList<KeyValueVersion>();
+		Collections.copy(sortedOps, ops);
+		Collections.sort(sortedOps, ops.get(0));
+		for (KeyValueVersion kvv : sortedOps){
+			migrateTo(kvv.getKey(), destStore.getKey());
 		}
 
 		// effectuer toutes les transactions en appelant le put du store qui va
 		// bien
-		slave = slaves.get(destStore);
-		for (int i = 0; i < keys.size(); i++) {
-			int newVal;
-			newVal = useMap.get(keys.get(i)) + 1;
-			
-			useMap.put(keys.get(i), newVal);
-			newVal = storeUse.get(destStore) + 1;
-			storeUse.put(selectedStore, newVal);
-			slave.put(keys.get(i), cats.get(i), datas.get(i));
-			mutexes.get(keys.get(i)).unlockRead();
+		slave = slaves.get(destStore.getKey());
+		for (KeyValueVersion kvv : sortedOps){
+			KeyInfo kInfo = getKeyInfo(kvv.getKey());
+			incrementUse(kInfo);
+
+			slave.put(kvv.getKey(), kvv.getCat(), kvv.getData());
+			kInfo.getMutex().unlockRead();
 		}
 
 	}
@@ -168,61 +185,51 @@ public class MasterNodeImpl extends AbstractNode implements MasterNode {
 	public Version putifVersion(String key, String cat, byte[] data,
 			Version matchVersion) throws RemoteException, InterruptedException {
 		Node slave;
-		int selectedStore = migrate(key);
-		slave = slaves.get(selectedStore);
-		System.out.println("selected store " + selectedStore);
+		KeyInfo kInfo = balance(key);
+		slave = slaves.get(kInfo.getStore());
+		System.out.println("selected store " + kInfo.getStore());
 
 		System.out.println("Redirection vers l'esclave " + slave.getName());
-		Version returnVersion = slave.putifVersion(key, cat, data, matchVersion);
-		mutexes.get(key).unlockRead();
+		Version returnVersion = slave
+				.putifVersion(key, cat, data, matchVersion);
+		kInfo.getMutex().unlockRead();
 		return returnVersion;
 	}
 
 	@Override
-	public void put(String key, String cat, byte[] data) throws RemoteException, InterruptedException {
+	public void put(String key, String cat, byte[] data)
+			throws RemoteException, InterruptedException {
 		Node slave;
-		int selectedStore = migrate(key);
-		slave = slaves.get(selectedStore);
-		System.out.println("selected store " + selectedStore);
+		KeyInfo kInfo = balance(key);
+		slave = slaves.get(kInfo.getStore());
+		System.out.println("selected store " + kInfo.getStore());
 
 		System.out.println("Redirection vers l'esclave " + slave.getName());
 		slave.put(key, cat, data);
-		mutexes.get(key).unlockRead();
+		kInfo.getMutex().unlockRead();
 	}
 
 	@Override
-	public synchronized void init(int numNode) throws Exception {
+	public void init(int numNode) throws Exception {
 		if (isStarted) {
 			return;
 		}
-		int nbStores = 3;
-		verrou = new Mutex();
-		slaves = new ArrayList<>();
-		clients = new ArrayList<>();
-		ArrayList<KVStore> stores;
-		stores = new ArrayList<KVStore>();
 		String storeName = "kvstore";
 		String hostName = "localhost";
 		int hostPort = 5000;
 
-		storeUse = new HashMap<Integer, Integer>();
 		for (int i = 0; i < nbStores; i++) {
 			int port = hostPort + 2 * i;
-			storeUse.put(new Integer(i), new Integer(0));
+			storeUse.put(new Integer(i), new AtomicInteger(0));
 			System.out.println(port);
 			stores.add(KVStoreFactory.getStore(new KVStoreConfig(storeName,
 					hostName + ":" + port)));
 		}
 
-		keyMap = new HashMap<String, Integer>();
-		useMap = new HashMap<String, Integer>();
-		mutexes = new HashMap<String, Mutex>();
 		for (int j = 1; j < 30; j++) {
 			Key k1, compteur;
 			int hash = ("P" + j).hashCode() % nbStores;
-			keyMap.put("P" + j, new Integer(hash));
-			useMap.put("P" + j, new Integer(0));
-			mutexes.put("P"+j, new Mutex());
+			keyMap.put("P" + j, new KeyInfo(hash));
 			compteur = Key.createKey("P" + j, "compteur");
 			for (int i = 1; i < 101; i++) {
 				// je crée l'objet avec ses attributs puis le sérialize
@@ -267,7 +274,7 @@ public class MasterNodeImpl extends AbstractNode implements MasterNode {
 	}
 
 	@Override
-	public synchronized void close() throws IOException {
+	public void close() throws IOException {
 		if (isStarted) {
 			slaves.clear();
 			isStarted = false;
@@ -275,12 +282,13 @@ public class MasterNodeImpl extends AbstractNode implements MasterNode {
 	}
 
 	@Override
-	public byte[] get(String key, String cat) throws RemoteException, InterruptedException {
+	public byte[] get(String key, String cat) throws RemoteException,
+	InterruptedException {
 		System.out.println("dit bonjour tonton" + key);
-		int selectedStore = migrate(key);
-		mutexes.get(key).lockRead();
-		byte[]returnValue = slaves.get(selectedStore).get(key, cat);
-		mutexes.get(key).unlockRead();
+		KeyInfo kInfo = balance(key);
+		byte[] returnValue = slaves.get(kInfo.getStore()).get(key, cat);
+		incrementUse(kInfo);
+		kInfo.getMutex().unlockRead();
 		return returnValue;
 	}
 

@@ -2,11 +2,12 @@ package org.abdr.client;
 
 import java.io.IOException;
 import java.rmi.RemoteException;
-import java.util.ArrayList;
+import java.util.List;
 
 import oracle.kv.Version;
 
 import org.abdr.node.AbstractNode;
+import org.abdr.node.KeyValueVersion;
 import org.abdr.node.Node;
 
 public class ClientNode extends AbstractNode implements Node {
@@ -66,9 +67,8 @@ public class ClientNode extends AbstractNode implements Node {
 	}
 
 	@Override
-	public void multiPut(ArrayList<String> keys, ArrayList<String> cats,
-			ArrayList<byte[]> datas, ArrayList<Version> matchVersions)
-			throws RemoteException {
+	public void multiPut(List<KeyValueVersion> ops) throws RemoteException,
+			InterruptedException {
 		// TODO Auto-generated method stub
 		
 	}

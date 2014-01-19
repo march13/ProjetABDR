@@ -3,7 +3,6 @@ import java.io.IOException;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Timer;
 
 import oracle.kv.*;
@@ -11,7 +10,7 @@ import oracle.kv.*;
 /**
  * TME avec KVStore : Init
  */
-public class AppliOneStore implements Comparator<ValueVersion>, Runnable {
+public class AppliOneStore implements Runnable {
 
 	private final KVStore store;
 	public int numThread;
@@ -155,13 +154,6 @@ public class AppliOneStore implements Comparator<ValueVersion>, Runnable {
 	/**
 	 * Initialisation
 	 */
-
-	@Override
-	public int compare(ValueVersion arg0, ValueVersion arg1) {
-		return Integer.compare(
-				Integer.parseInt(new String(arg0.getValue().getValue())),
-				Integer.parseInt(new String(arg1.getValue().getValue())));
-	}
 
 	@Override
 	public void run() {

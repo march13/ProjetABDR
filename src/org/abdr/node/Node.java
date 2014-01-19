@@ -1,9 +1,9 @@
 package org.abdr.node;
 
+import java.util.List;
 import java.io.Closeable;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
-import java.util.ArrayList;
 
 import oracle.kv.Version;
 
@@ -24,8 +24,7 @@ public interface Node extends Remote, Closeable {
 	void takeMyData(String srcHost, String srcPort, String key)
 			throws RemoteException;
 
-	void multiPut(ArrayList<String> keys, ArrayList<String> cats,
-			ArrayList<byte[]> datas, ArrayList<Version> matchVersions)
+	void multiPut(List<KeyValueVersion> ops)
 			throws RemoteException, InterruptedException;
 	
 }
